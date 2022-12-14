@@ -27,6 +27,15 @@ class DataclassesEngine(BaseDTOEngine):
         )
         self.type_registry.add_import(
             ast.ImportFrom(
+                module="dataclasses_json",
+                names=[
+                    ast.alias(name="config"),
+                ],
+                level=0,
+            )
+        )
+        self.type_registry.add_import(
+            ast.ImportFrom(
                 module="typing",
                 names=[
                     ast.alias(name="List"),
@@ -138,7 +147,19 @@ class DataclassesEngine(BaseDTOEngine):
             keywords.append(ast.keyword(arg="default", value=ast.Constant(value=None)))
         if field_name != normalized_field_name:
             keywords.append(
-                ast.keyword(arg="field_name", value=ast.Constant(value=field_name)),
+                ast.keyword(
+                    arg="metadata",
+                    value=ast.Call(
+                        func=ast.Name(id="config", ctx=ast.Load()),
+                        args=[],
+                        keywords=[
+                            ast.keyword(
+                                arg="field_name",
+                                value=ast.Constant(value=field_name),
+                            ),
+                        ]
+                    ),
+                ),
             )
         value = ast.Call(
             func=ast.Name(id="field", ctx=ast.Load()),

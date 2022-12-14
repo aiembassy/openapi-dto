@@ -4,7 +4,6 @@ from pathlib import Path
 from typing import Optional, List
 from urllib.request import urlretrieve
 
-import ast
 import typer
 import logging
 
