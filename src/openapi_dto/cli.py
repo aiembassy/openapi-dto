@@ -59,7 +59,12 @@ def main(
 
     # Load schemas from the provided API definition
     openapi_schema = json.loads(openapi_schema_path.read_text())
-    schemas = openapi_schema["components"]["schemas"]
+
+    # There might be different ways of encoding the schema, so we try them
+    try:
+        schemas = openapi_schema["components"]["schemas"]
+    except KeyError:
+        schemas = openapi_schema["definitions"]
 
     # Process the types one by one
     registry = TypeRegistry()
