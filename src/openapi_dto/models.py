@@ -47,7 +47,12 @@ class TypeDefinition:
 @dataclass_json(undefined=Undefined.EXCLUDE)
 @dataclass
 class Schema:
-    type: str
+    type: Optional[str] = None
     enum: Optional[List[str]] = None
     properties: Optional[Dict[str, TypeDefinition]] = None
     required: Optional[List[str]] = None
+    all_of: Optional[List["Schema"]] = field(
+        default=None, metadata=config(field_name="allOf")
+    )
+    title: Optional[str] = None
+    ref: Optional[str] = field(default=None, metadata=config(field_name="$ref"))

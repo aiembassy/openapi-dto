@@ -1,5 +1,4 @@
 import ast
-
 from openapi_dto.config import NamingConvention
 from openapi_dto.engine.base import BaseDTOEngine
 from openapi_dto.models import TypeDefinition, Schema
@@ -41,7 +40,50 @@ class DataclassesEngine(BaseDTOEngine):
     def generate_type(self, name: str, type_schema: Schema) -> ast.AST:
         if type_schema.enum is not None:
             return self._generate_enum(name, type_schema)
+        if type_schema.all_of is not None:
+            # In some cases there is just a $ref attribute provided as the first
+            # entry and then the second one is a proper definition. There is no
+            # need to create a union then.
+            if (
+                2 == len(type_schema.all_of)
+                and type_schema.all_of[0].ref is not None
+                and "object" == type_schema.all_of[1].type
+            ):
+                return self._generate_class(name, type_schema.all_of[1])
+            return self._generate_union(name, type_schema)
         return self._generate_class(name, type_schema)
+
+    def _generate_union(
+        self,
+        name: str,
+        type_schema: Schema,
+    ) -> ast.AST:
+        union_options = [
+            self._parse_union_member_name(union_member)
+            for union_member in type_schema.all_of
+        ]
+        return ast.Assign(
+            targets=[ast.Name(id=name, ctx=ast.Store())],
+            value=ast.Subscript(
+                value=ast.Name(id="Union", ctx=ast.Load()),
+                slice=ast.Tuple(
+                    elts=[
+                        ast.Name(id=subtype_name, ctx=ast.Load())
+                        for subtype_name in union_options
+                    ],
+                    ctx=ast.Load(),
+                ),
+                ctx=ast.Load(),
+            ),
+            lineno=0,
+        )
+
+    def _parse_union_member_name(self, union_member: Schema) -> str:
+        if union_member.ref is not None:
+            return self._parse_ref_name(union_member.ref)
+        if union_member.title is not None:
+            return union_member.title
+        raise ValueError
 
     def _generate_class(
         self,
@@ -120,9 +162,7 @@ class DataclassesEngine(BaseDTOEngine):
         if type_def.ref is not None:
             # If the $ref is provided, it should reference to one of the other
             # types, so we can just use this value.
-            field_type_name = type_def.ref.split("/")[-1]
-            if field_type_name not in self.type_registry:
-                field_type_name = f'"{field_type_name}"'
+            field_type_name = self._parse_ref_name(type_def.ref)
             type_annotation = ast.Name(id=field_type_name, ctx=ast.Load())
         elif class_name == type_def.type:
             # That means there is a recursive definition, so the original name
@@ -171,6 +211,18 @@ class DataclassesEngine(BaseDTOEngine):
                 slice=ast.Tuple(elts=auto_types),
                 ctx=ast.Load(),
             )
+        elif "object" == type_def.type:
+            type_annotation = ast.Subscript(
+                value=ast.Name(id="Dict", ctx=ast.Load()),
+                slice=ast.Tuple(
+                    elts=[
+                        ast.Name(id="Any", ctx=ast.Load()),
+                        ast.Name(id="Any", ctx=ast.Load()),
+                    ],
+                    ctx=ast.Load(),
+                ),
+                ctx=ast.Load(),
+            )
         else:
             field_type_name = self.type_registry[type_def.type].__name__
             type_annotation = ast.Name(id=field_type_name, ctx=ast.Load())
@@ -188,6 +240,12 @@ class DataclassesEngine(BaseDTOEngine):
             pass
 
         return type_annotation
+
+    def _parse_ref_name(self, ref_value: str) -> str:
+        field_type_name = ref_value.split("/")[-1]
+        if field_type_name not in self.type_registry:
+            field_type_name = f'"{field_type_name}"'
+        return field_type_name
 
     def _generate_enum(self, name: str, type_schema: Schema) -> ast.AST:
         self.type_registry.add_import(

@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Optional, List
 from urllib.request import urlretrieve
 
+import ast
 import typer
 import logging
 
@@ -41,9 +42,9 @@ def main(
     logger.info("Output engine: %s", output_engine)
 
     # Process the headers to the format that is expected by urllib
-    http_header = [] \
-        if http_header is None \
-        else list(map(lambda x: x.split(":", 1), http_header))
+    http_header = (
+        [] if http_header is None else list(map(lambda x: x.split(":", 1), http_header))
+    )
 
     # Process both remote and local files
     openapi_schema_path = Path(openapi_file_path)
