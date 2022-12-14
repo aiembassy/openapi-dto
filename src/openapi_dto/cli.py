@@ -1,6 +1,7 @@
 import json
 import urllib
 from pathlib import Path
+from typing import Optional, List
 from urllib.request import urlretrieve
 
 import typer
@@ -33,10 +34,16 @@ def main(
         OutputEngine.DATACLASS.value,
         case_sensitive=False,
     ),
+    http_header: Optional[List[str]] = None,
 ):
     logger.info("Loading OpenAPI schema definition from %s", openapi_file_path)
     logger.info("Using %s as naming convention", naming_convention)
     logger.info("Output engine: %s", output_engine)
+
+    # Process the headers to the format that is expected by urllib
+    http_header = [] \
+        if http_header is None \
+        else list(map(lambda x: x.split(":", 1), http_header))
 
     # Process both remote and local files
     openapi_schema_path = Path(openapi_file_path)
@@ -45,7 +52,7 @@ def main(
         opener = urllib.request.build_opener()
         opener.addheaders = [
             ("Accept", "application/json"),
-        ]
+        ] + http_header
         urllib.request.install_opener(opener)
         tmp_file, _ = urllib.request.urlretrieve(openapi_file_path)
         openapi_schema_path = Path(tmp_file)
