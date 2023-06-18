@@ -13,8 +13,6 @@ class DataclassesEngine(BaseDTOEngine):
     the DTOs.
     """
 
-    UNKNOWN_MEMBERS_COUNTER = 0
-
     def __init__(
         self, type_registry: TypeRegistry, naming_convention: NamingConvention
     ):
@@ -82,6 +80,7 @@ class DataclassesEngine(BaseDTOEngine):
         )
 
     def generate_type(self, name: str, type_schema: TypeDefinition) -> ast.AST:
+        # TODO: see https://swagger.io/docs/specification/data-models/dictionaries/
         if type_schema.enum is not None:
             return self._generate_enum(name, type_schema)
         if type_schema.additional_properties is not None:
@@ -104,10 +103,19 @@ class DataclassesEngine(BaseDTOEngine):
         name: str,
         type_schema: TypeDefinition,
     ) -> ast.AST:
-        union_options = [
-            self._parse_union_member_name(union_member)
-            for union_member in type_schema.all_of
-        ]
+        union_options = []
+        for i, union_member in enumerate(type_schema.all_of):
+            try:
+                member_name = self._parse_union_member_name(union_member)
+            except ValueError:
+                # Union member might be referring to a typed structure, such as
+                # dictionary, or a different union.
+                member_name = f"{name}_{i}"
+                generated_type = self.generate_type(member_name, union_member)
+                self.type_registry.map(member_name, generated_type)
+            finally:
+                union_options.append(member_name)
+
         return ast.Assign(
             targets=[ast.Name(id=name, ctx=ast.Store())],
             value=ast.Subscript(
@@ -129,9 +137,10 @@ class DataclassesEngine(BaseDTOEngine):
             return self._parse_ref_name(union_member.ref)
         if union_member.title is not None:
             return union_member.title
-        # As a fallback, any name might be generated, as such a union member won't
-        # be ever referred anywhere else in the code
-        return self._generate_type_name()
+        # ValueError indicates there is no way to extract the name of a union member,
+        # so it is possibly not a name of a type, but some sort of dictionary-like
+        # object and has to be handled externally
+        raise ValueError
 
     def _generate_class(
         self,
@@ -342,6 +351,3 @@ class DataclassesEngine(BaseDTOEngine):
             decorator_list=[],
         )
 
-    def _generate_type_name(self) -> str:
-        DataclassesEngine.UNKNOWN_MEMBERS_COUNTER += 1
-        return f"Type_{DataclassesEngine.UNKNOWN_MEMBERS_COUNTER}"
