@@ -1,5 +1,6 @@
 import ast
 import keyword
+from typing import Optional
 
 from openapi_dto.config import NamingConvention
 from openapi_dto.engine.base import BaseDTOEngine
@@ -79,9 +80,13 @@ class DataclassesEngine(BaseDTOEngine):
             lineno=0,
         )
 
-    def generate_type(self, name: str, type_schema: TypeDefinition) -> ast.AST:
+    def generate_type(
+        self, name: str, type_schema: TypeDefinition, *, docstring: Optional[str] = None
+    ) -> ast.AST:
         if type_schema.schema is not None:
-            return self.generate_type(name, type_schema.schema)
+            return self.generate_type(
+                name, type_schema.schema, docstring=type_schema.description
+            )
         if type_schema.enum is not None:
             return self._generate_enum(name, type_schema)
         if type_schema.additional_properties is not None:
@@ -95,9 +100,13 @@ class DataclassesEngine(BaseDTOEngine):
                 and type_schema.all_of[0].ref is not None
                 and "object" == type_schema.all_of[1].type
             ):
-                return self._generate_class(name, type_schema.all_of[1])
+                return self._generate_class(
+                    name, type_schema.all_of[1], docstring=type_schema.description
+                )
             return self._generate_union(name, type_schema)
-        return self._generate_class(name, type_schema)
+        return self._generate_class(
+            name, type_schema, docstring=type_schema.description
+        )
 
     def _generate_union(
         self,
@@ -144,12 +153,13 @@ class DataclassesEngine(BaseDTOEngine):
         raise ValueError
 
     def _generate_class(
-        self,
-        name: str,
-        type_schema: TypeDefinition,
+        self, name: str, type_schema: TypeDefinition, *, docstring: Optional[str] = None
     ) -> ast.AST:
+        class_body = []
+
+        # TODO: append the docstring to a class
+
         if type_schema.properties is not None:
-            class_body = []
             nullable_groups = [
                 (
                     False,
@@ -163,7 +173,7 @@ class DataclassesEngine(BaseDTOEngine):
                         continue
                     class_body.append(self._generate_field(name, field_name, type_def))
         else:
-            class_body = [ast.Pass()]
+            class_body.append(ast.Pass())
 
         return ast.ClassDef(
             name=name,
