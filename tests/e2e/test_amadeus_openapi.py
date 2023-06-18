@@ -1,14 +1,15 @@
 from pathlib import Path
 
+import pytest
+
 from openapi_dto.cli import main
 from openapi_dto.config import NamingConvention, OutputEngine
 
 CURRENT_DIR = Path(__file__).parent / "fixtures"
 
 
-def test_load_flight_offers_search_amadeus_openapi_v2():
-    input_file = CURRENT_DIR / "amadeus_fos_openapi_v2.json"
-
+@pytest.mark.parametrize("input_file", CURRENT_DIR.glob("*.json"))
+def test_load_openapi_defs(input_file: Path):
     main(
         str(input_file),
         naming_convention=NamingConvention.CAMEL_CASE,

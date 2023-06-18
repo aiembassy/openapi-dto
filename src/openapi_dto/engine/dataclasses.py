@@ -1,4 +1,5 @@
 import ast
+from typing import Optional
 
 from openapi_dto.config import NamingConvention
 from openapi_dto.engine.base import BaseDTOEngine
@@ -60,9 +61,31 @@ class DataclassesEngine(BaseDTOEngine):
             )
         )
 
+    def _generate_dictionary(self, name: str, type_schema: TypeDefinition) -> ast.AST:
+        # TODO: extract the value type from type_schema (ref or type)
+        return ast.Assign(
+            targets=[
+                ast.Name(id=name, ctx=ast.Store()),
+            ],
+            value=ast.Subscript(
+                value=ast.Name(id="Dict", ctx=ast.Load()),
+                slice=ast.Tuple(
+                    elts=[
+                        ast.Name(id="Any", ctx=ast.Load()),
+                        ast.Name(id="Any", ctx=ast.Load()),
+                    ],
+                    ctx=ast.Load(),
+                ),
+                ctx=ast.Load(),
+            ),
+            lineno=0,
+        )
+
     def generate_type(self, name: str, type_schema: TypeDefinition) -> ast.AST:
         if type_schema.enum is not None:
             return self._generate_enum(name, type_schema)
+        if type_schema.additional_properties is not None:
+            return self._generate_dictionary(name, type_schema)
         if type_schema.all_of is not None:
             # In some cases there is just a $ref attribute provided as the first
             # entry and then the second one is a proper definition. There is no
@@ -108,8 +131,7 @@ class DataclassesEngine(BaseDTOEngine):
             return union_member.title
         # As a fallback, any name might be generated, as such a union member won't
         # be ever referred anywhere else in the code
-        DataclassesEngine.UNKNOWN_MEMBERS_COUNTER += 1
-        return f"UnionMember_{DataclassesEngine.UNKNOWN_MEMBERS_COUNTER}"
+        return self._generate_type_name()
 
     def _generate_class(
         self,
@@ -222,11 +244,16 @@ class DataclassesEngine(BaseDTOEngine):
                 ctx=ast.Load(),
             )
         elif type_def.properties is not None:
-            generated_type = self.generate_type(type_def.title, type_def)
-            self.type_registry.map(type_def.title, generated_type)
-            type_annotation = ast.Name(id=type_def.title, ctx=ast.Load())
+            # This is a nested definition of a type with a set of attributes. Sometimes
+            # those inner structures do not have a proper name provided, and they have
+            # to be generated from the parent class and the attribute name.
+            type_name = type_def.title or f"{class_name}_{field_name}"
+            generated_type = self.generate_type(type_name, type_def)
+            self.type_registry.map(type_name, generated_type)
+            type_annotation = ast.Name(id=type_name, ctx=ast.Load())
         elif type_def.all_of is not None:
-            # In some cases there might be multiple types accepted
+            # In some cases there might be multiple types accepted, so we need to use
+            # a union of all the accepted subtypes
             subfield_type_annotations = [
                 self._get_field_type_annotation(
                     class_name,
@@ -254,6 +281,8 @@ class DataclassesEngine(BaseDTOEngine):
                 ctx=ast.Load(),
             )
         elif "object" == type_def.type:
+            # Accepts any JSON-like object, without specifying the field names and
+            # accepted types of values
             type_annotation = ast.Subscript(
                 value=ast.Name(id="Dict", ctx=ast.Load()),
                 slice=ast.Tuple(
@@ -264,6 +293,12 @@ class DataclassesEngine(BaseDTOEngine):
                     ctx=ast.Load(),
                 ),
                 ctx=ast.Load(),
+            )
+        elif type_def.additional_properties is not None:
+            # This is a name over a different type, usually a primitive with an example
+            # of usage, thus we do not need to create an alias
+            type_annotation = self._get_field_type_annotation(
+                class_name, field_name, type_def.additional_properties
             )
         else:
             field_type_name = self.type_registry[type_def.type].__name__
@@ -306,3 +341,7 @@ class DataclassesEngine(BaseDTOEngine):
             ],
             decorator_list=[],
         )
+
+    def _generate_type_name(self) -> str:
+        DataclassesEngine.UNKNOWN_MEMBERS_COUNTER += 1
+        return f"Type_{DataclassesEngine.UNKNOWN_MEMBERS_COUNTER}"

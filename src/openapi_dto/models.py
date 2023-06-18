@@ -44,3 +44,6 @@ class TypeDefinition:
     minimum: Optional[int] = None
     example: Optional[ValueExample] = None
     required: Optional[List[str]] = None
+    additional_properties: Optional["TypeDefinition"] = field(
+        default=None, metadata=config(field_name="additionalProperties")
+    )
