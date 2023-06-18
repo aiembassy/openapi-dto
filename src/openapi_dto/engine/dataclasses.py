@@ -1,7 +1,8 @@
 import ast
+
 from openapi_dto.config import NamingConvention
 from openapi_dto.engine.base import BaseDTOEngine
-from openapi_dto.models import TypeDefinition, Schema
+from openapi_dto.models import TypeDefinition
 from openapi_dto.registry import TypeRegistry
 
 
@@ -10,6 +11,8 @@ class DataclassesEngine(BaseDTOEngine):
     Engine using Python built-in dataclasses with dataclasses-json to generate
     the DTOs.
     """
+
+    UNKNOWN_MEMBERS_COUNTER = 0
 
     def __init__(
         self, type_registry: TypeRegistry, naming_convention: NamingConvention
@@ -41,12 +44,23 @@ class DataclassesEngine(BaseDTOEngine):
                     ast.alias(name="List"),
                     ast.alias(name="Union"),
                     ast.alias(name="Optional"),
+                    ast.alias(name="Dict"),
+                    ast.alias(name="Any"),
+                ],
+                level=0,
+            )
+        )
+        self.type_registry.add_import(
+            ast.ImportFrom(
+                module="enum",
+                names=[
+                    ast.alias(name="Enum"),
                 ],
                 level=0,
             )
         )
 
-    def generate_type(self, name: str, type_schema: Schema) -> ast.AST:
+    def generate_type(self, name: str, type_schema: TypeDefinition) -> ast.AST:
         if type_schema.enum is not None:
             return self._generate_enum(name, type_schema)
         if type_schema.all_of is not None:
@@ -65,7 +79,7 @@ class DataclassesEngine(BaseDTOEngine):
     def _generate_union(
         self,
         name: str,
-        type_schema: Schema,
+        type_schema: TypeDefinition,
     ) -> ast.AST:
         union_options = [
             self._parse_union_member_name(union_member)
@@ -87,17 +101,20 @@ class DataclassesEngine(BaseDTOEngine):
             lineno=0,
         )
 
-    def _parse_union_member_name(self, union_member: Schema) -> str:
+    def _parse_union_member_name(self, union_member: TypeDefinition) -> str:
         if union_member.ref is not None:
             return self._parse_ref_name(union_member.ref)
         if union_member.title is not None:
             return union_member.title
-        raise ValueError
+        # As a fallback, any name might be generated, as such a union member won't
+        # be ever referred anywhere else in the code
+        DataclassesEngine.UNKNOWN_MEMBERS_COUNTER += 1
+        return f"UnionMember_{DataclassesEngine.UNKNOWN_MEMBERS_COUNTER}"
 
     def _generate_class(
         self,
         name: str,
-        type_schema: Schema,
+        type_schema: TypeDefinition,
     ) -> ast.AST:
         if type_schema.properties is not None:
             class_body = []
@@ -157,7 +174,7 @@ class DataclassesEngine(BaseDTOEngine):
                                 arg="field_name",
                                 value=ast.Constant(value=field_name),
                             ),
-                        ]
+                        ],
                     ),
                 ),
             )
@@ -204,6 +221,10 @@ class DataclassesEngine(BaseDTOEngine):
                 slice=subfield_type_annotation,
                 ctx=ast.Load(),
             )
+        elif type_def.properties is not None:
+            generated_type = self.generate_type(type_def.title, type_def)
+            self.type_registry.map(type_def.title, generated_type)
+            type_annotation = ast.Name(id=type_def.title, ctx=ast.Load())
         elif type_def.all_of is not None:
             # In some cases there might be multiple types accepted
             subfield_type_annotations = [
@@ -268,15 +289,7 @@ class DataclassesEngine(BaseDTOEngine):
             field_type_name = f'"{field_type_name}"'
         return field_type_name
 
-    def _generate_enum(self, name: str, type_schema: Schema) -> ast.AST:
-        self.type_registry.add_import(
-            ast.ImportFrom(
-                module="enum",
-                names=[ast.alias(name="Enum")],
-                level=0,
-            )
-        )
-
+    def _generate_enum(self, name: str, type_schema: TypeDefinition) -> ast.AST:
         return ast.ClassDef(
             name=name,
             bases=[ast.Name(id="Enum", ctx=ast.Load())],

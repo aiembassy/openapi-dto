@@ -10,7 +10,7 @@ import logging
 from openapi_dto.config import NamingConvention, OutputEngine
 from openapi_dto.engine.base import BaseDTOEngine
 from openapi_dto.engine.dataclasses import DataclassesEngine
-from openapi_dto.models import Schema
+from openapi_dto.models import TypeDefinition
 from openapi_dto.registry import TypeRegistry
 
 logger = logging.getLogger(__name__)
@@ -73,7 +73,7 @@ def main(
         naming_convention=naming_convention,
     )
     for type_name, type_schema in schemas.items():
-        schema = Schema.from_dict(type_schema)
+        schema = TypeDefinition.from_dict(type_schema)
         generated_type = engine.generate_type(type_name, schema)
         registry.map(type_name, generated_type)
 

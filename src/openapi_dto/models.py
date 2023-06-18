@@ -12,15 +12,17 @@ ValueExample = Union[
 @dataclass
 class TypeDefinition:
     type: Optional[str] = None
+    enum: Optional[List[str]] = None
+    properties: Optional[Dict[str, "TypeDefinition"]] = None
+    title: Optional[str] = None
     ref: Optional[str] = field(default=None, metadata=config(field_name="$ref"))
     format: Optional[str] = None
-    title: Optional[str] = None
     nullable: bool = False
     items: Optional["TypeDefinition"] = None
     all_of: Optional[List["TypeDefinition"]] = field(
         default=None, metadata=config(field_name="allOf")
     )
-    one_of: Optional[List["Schema"]] = field(
+    one_of: Optional[List["TypeDefinition"]] = field(
         default=None, metadata=config(field_name="oneOf")
     )
     read_only: Optional[bool] = field(
@@ -41,18 +43,4 @@ class TypeDefinition:
     maximum: Optional[int] = None
     minimum: Optional[int] = None
     example: Optional[ValueExample] = None
-    enum: Optional[List[str]] = None
-
-
-@dataclass_json(undefined=Undefined.EXCLUDE)
-@dataclass
-class Schema:
-    type: Optional[str] = None
-    enum: Optional[List[str]] = None
-    properties: Optional[Dict[str, TypeDefinition]] = None
     required: Optional[List[str]] = None
-    all_of: Optional[List["Schema"]] = field(
-        default=None, metadata=config(field_name="allOf")
-    )
-    title: Optional[str] = None
-    ref: Optional[str] = field(default=None, metadata=config(field_name="$ref"))
