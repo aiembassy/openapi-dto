@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "openapi-dto"
-version = "0.1.6"
+version = "0.1.7"
 description = "A CLI tool for automated DTO generation using OpenAPI schema"
 authors = ["Kacper Łukawski <kacper.lukawsk@embassy.ai>"]
 packages = [
