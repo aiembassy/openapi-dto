@@ -36,6 +36,7 @@ def main(
     ),
     http_header: Optional[List[str]] = None,
 ):
+    # TODO: Allow multiple files to be parsed at once
     logger.info("Loading OpenAPI schema definition from %s", openapi_file_path)
     logger.info("Using %s as naming convention", naming_convention)
     logger.info("Output engine: %s", output_engine)
@@ -60,11 +61,11 @@ def main(
     # Load schemas from the provided API definition
     openapi_schema = json.loads(openapi_schema_path.read_text())
 
-    # There might be different ways of encoding the schema, so we try them
-    try:
-        schemas = openapi_schema["components"]["schemas"]
-    except KeyError:
-        schemas = openapi_schema["definitions"]
+    # There might be different ways of encoding the schema, so we try them all
+    schemas = {}
+    schemas.update(**openapi_schema.get("components", {}).get("schemas", {}))
+    schemas.update(**openapi_schema.get("definitions", {}))
+    schemas.update(**openapi_schema.get("responses", {}))
 
     # Process the types one by one
     registry = TypeRegistry()

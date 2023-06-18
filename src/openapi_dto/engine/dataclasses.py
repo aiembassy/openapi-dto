@@ -1,5 +1,5 @@
 import ast
-from typing import Optional
+import keyword
 
 from openapi_dto.config import NamingConvention
 from openapi_dto.engine.base import BaseDTOEngine
@@ -80,7 +80,8 @@ class DataclassesEngine(BaseDTOEngine):
         )
 
     def generate_type(self, name: str, type_schema: TypeDefinition) -> ast.AST:
-        # TODO: see https://swagger.io/docs/specification/data-models/dictionaries/
+        if type_schema.schema is not None:
+            return self.generate_type(name, type_schema.schema)
         if type_schema.enum is not None:
             return self._generate_enum(name, type_schema)
         if type_schema.additional_properties is not None:
@@ -157,10 +158,10 @@ class DataclassesEngine(BaseDTOEngine):
                 (True,),  # Then the nullable ones
             ]
             for nullable_group in nullable_groups:
-                for type_name, type_def in type_schema.properties.items():
+                for field_name, type_def in type_schema.properties.items():
                     if type_def.nullable not in nullable_group:
                         continue
-                    class_body.append(self._generate_field(name, type_name, type_def))
+                    class_body.append(self._generate_field(name, field_name, type_def))
         else:
             class_body = [ast.Pass()]
 
@@ -183,7 +184,10 @@ class DataclassesEngine(BaseDTOEngine):
         field_name: str,
         type_def: TypeDefinition,
     ) -> ast.AST:
-        normalized_field_name = self.convert_name(field_name)
+        normalized_field_name = self.convert_name(
+            field_name if not keyword.iskeyword(field_name) else f"{field_name}_val"
+        )
+
         type_annotation = self._get_field_type_annotation(
             class_name,
             field_name,
@@ -350,4 +354,3 @@ class DataclassesEngine(BaseDTOEngine):
             ],
             decorator_list=[],
         )
-

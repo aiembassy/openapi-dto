@@ -26,7 +26,6 @@ class BaseDTOEngine(abc.ABC):
         raise NotImplementedError
 
     def convert_name(self, name: str) -> str:
-        # TODO: handle reserved keywords
         if NamingConvention.SNAKE_CASE == self.naming_convention:
             return camel_converter.to_snake(name)
         if NamingConvention.CAMEL_CASE == self.naming_convention:

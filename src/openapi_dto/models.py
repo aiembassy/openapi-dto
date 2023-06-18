@@ -47,3 +47,5 @@ class TypeDefinition:
     additional_properties: Optional["TypeDefinition"] = field(
         default=None, metadata=config(field_name="additionalProperties")
     )
+    description: Optional[str] = None
+    schema: Optional["TypeDefinition"] = None
