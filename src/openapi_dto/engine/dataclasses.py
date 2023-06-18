@@ -104,9 +104,7 @@ class DataclassesEngine(BaseDTOEngine):
                     name, type_schema.all_of[1], docstring=type_schema.description
                 )
             return self._generate_union(name, type_schema)
-        return self._generate_class(
-            name, type_schema, docstring=type_schema.description
-        )
+        return self._generate_class(name, type_schema, docstring=docstring)
 
     def _generate_union(
         self,
@@ -157,7 +155,8 @@ class DataclassesEngine(BaseDTOEngine):
     ) -> ast.AST:
         class_body = []
 
-        # TODO: append the docstring to a class
+        if docstring:
+            class_body.append(ast.Expr(value=ast.Constant(value=docstring)))
 
         if type_schema.properties is not None:
             nullable_groups = [
